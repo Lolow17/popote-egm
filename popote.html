@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Popote EGM</title>
+<style>
+  :root{ --bg:#0b0f14; --card:#151b23; --card2:#1e2630; --line:#2a3441; --txt:#eef2f6; --accent:#3b82f6; --green:#22c55e; }
+  body{background:var(--bg);color:var(--txt);font-family:sans-serif;margin:0;padding-bottom:80px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:14px}
+  .btn{background:var(--accent);color:#fff;border:none;padding:15px;width:100%;border-radius:10px;font-weight:700}
+  .view{display:none} .view.active{display:block}
+  .tabs{position:fixed;bottom:0;width:100%;background:rgba(21,27,35,.9);display:flex;padding:10px}
+  .tabs button{flex:1;background:none;border:none;color:#8a97a6;font-weight:600}
+  .tabs button.active{color:var(--accent)}
+  .row{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid var(--line)}
+</style>
+</head>
+<body>
+<header style="padding:20px"><h1>🍺 Popote EGM</h1><div id="syncTxt">Chargement...</div></header>
+<main>
+  <section class="view active" id="v-conso">
+    <div id="persPick"><div class="card"><input class="in" id="persSearch" placeholder="Rechercher..." style="width:100%"></div><div id="persResults"></div></div>
+    <div id="persActive" style="display:none"><div class="card"><div id="paNom"></div><button class="btn" onclick="clearPers()">Changer</button></div><div id="csProds"></div></div>
+    <div class="card"><h2>Log</h2><div id="csLog"></div></div>
+  </section>
+  <section class="view" id="v-bilan"><div class="card" id="blGroups"></div></section>
+  <section class="view" id="v-stock"><div class="card" id="stList"></div></section>
+</main>
+<nav class="tabs"><button data-v="conso" class="active">Saisie</button><button data-v="bilan">Bilan</button><button data-v="stock">Stock</button></nav>
+
+<script>
+// ⚠️ MODIFIE CETTE LIGNE :
+const API_URL = "https://script.google.com/macros/s/AKfycbxqaKr2-fz9wg43lqbwSqOtl64PSfV118FEi44S5YVIg7BJQtCN_CMu8w05AixGw1B2/exec"; 
+
+let DB={prods:[],pers:[],consos:[],month:''}, curPers=null, run={};
+
+async function loadDB(){
+  try {
+    const res = await fetch(API_URL);
+    const data = await res.json();
+    DB = data;
+    document.getElementById('syncTxt').textContent = "En ligne";
+    renderAll();
+  } catch(e) { document.getElementById('syncTxt').textContent = "Erreur de connexion"; }
+}
+
+function renderAll(){
+  renderPersSearch();
+  renderLog();
+  renderBilan();
+  renderStock();
+}
+
+function renderPersSearch(){
+  const res = document.getElementById('persResults');
+  res.innerHTML = DB.pers.map(p => `<div class="row" onclick="selPers('${p.id}')">${p.nom}</div>`).join('');
+}
+
+function selPers(id){
+  curPers = DB.pers.find(p=>p.id===id);
+  document.getElementById('persPick').style.display='none';
+  document.getElementById('persActive').style.display='block';
+  document.getElementById('paNom').textContent = curPers.nom;
+}
+
+function clearPers(){
+  document.getElementById('persPick').style.display='block';
+  document.getElementById('persActive').style.display='none';
+}
+
+function renderLog(){
+  document.getElementById('csLog').innerHTML = DB.consos.slice(-5).map(c=>`<div class="row">${c.persId} a consommé</div>`).join('');
+}
+
+function renderBilan(){ document.getElementById('blGroups').innerHTML = "Bilan en cours..."; }
+function renderStock(){ document.getElementById('stList').innerHTML = "Stock en cours..."; }
+
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',e=>{
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('v-'+b.dataset.v).classList.add('active');
+}));
+
+loadDB();
+</script>
+</body>
+</html>
