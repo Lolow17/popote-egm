@@ -185,10 +185,14 @@
       </div>
       <div class="card" style="margin-top:14px">
         <h2>État du véhicule <span id="lblVehState">BRAVO 1</span></h2>
+        <div id="greTotalSorties" style="font-size:13px; font-weight:700; color:var(--amber); margin-bottom:12px; background:var(--card2); padding:8px 12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+          <span>📦 Total munitions sorties du VL :</span>
+          <span id="greTotalSortiesVal" style="font-size:15px;">0</span>
+        </div>
         <div id="greState"></div>
       </div>
 
-      <!-- BILAN MO / TIRÉS (AVEC DÉTAIL NOMINATIF) -->
+      <!-- BILAN MO / TIRÉS (AVEC CORRECTION D'ERREUR) -->
       <div class="card" style="margin-top:14px; border-color:var(--amber)">
         <h2>📊 Bilan MO (Munitions Tirées)</h2>
         <div id="greBilanMO"></div>
@@ -290,7 +294,7 @@ function renderStock(){document.getElementById('stList').innerHTML=DB.prods.map(
 async function stockStep(id,d){const p=DB.prods.find(x=>x.id===id);p.stock=Math.max(0,p.stock+d);await sSet(KEY_PROD,DB.prods);renderStock();if(curPers)renderProds();}
 
 // -----------------------------------------------------
-// LOGIQUE MUNITIONS / VÉHICULES (BILAN MO AVEC DÉTAIL NOMINATIF)
+// LOGIQUE MUNITIONS / VÉHICULES (BILAN MO AVEC CORRECTION D'ERREUR)
 // -----------------------------------------------------
 let curVeh = 'B1';
 let curGrePers = null;
@@ -459,10 +463,47 @@ async function actionGreItem(id, actionType) {
   renderGreState();
 }
 
+// FONCTION DE CORRECTION (RETOUR ARRIÈRE DEPUIS LE BILAN MO)
+async function revertTir(persId, typeId) {
+  if(!DB.tirsMO) return;
+  const tirRecord = DB.tirsMO.find(t => t.vehicule === curVeh && t.persId === persId && t.type === typeId);
+  if(!tirRecord) return;
+
+  // 1. Retirer 1 du bilan MO
+  tirRecord.qty -= 1;
+  if(tirRecord.qty <= 0) {
+    DB.tirsMO = DB.tirsMO.filter(t => t.id !== tirRecord.id);
+  }
+
+  // 2. Remettre la munition en stock entre les mains de la personne dans le véhicule
+  const activeItem = DB.grenades.find(g => g.vehicule === curVeh && g.persId === persId && g.type === typeId);
+  if(activeItem) {
+    activeItem.qty += 1;
+  } else {
+    DB.grenades.push({
+      id: 'g' + Date.now() + Math.random().toString(36).slice(2,5),
+      persId: persId,
+      vehicule: curVeh,
+      type: typeId,
+      qty: 1
+    });
+  }
+
+  await sSet(KEY_GRE, DB.grenades);
+  await sSet('popote:tirsMO', DB.tirsMO);
+  toast('↺ Bilan corrigé : munition rétablie');
+  renderGreState();
+}
+
 function renderGreState() {
   const inVeh = DB.grenades.filter(g => g.vehicule === curVeh);
-  const listSacs = [{id:'u_sac_b1', nom:'SAC LG BRAVO 1'}, {id:'u_sac_b2', nom:'SAC LG BRAVO 2'}];
+  const listSacs = [{id:'u_sac_b1', nom:'SAC LG BRAVO 1', grp:'MATÉRIEL'}, {id:'u_sac_b2', nom:'SAC LG BRAVO 2', grp:'MATÉRIEL'}];
   const allPers = [...DB.pers, ...listSacs];
+
+  // Calcul du total des munitions sorties (en circulation active dans le véhicule)
+  let totalSorties = 0;
+  inVeh.forEach(g => totalSorties += g.qty);
+  document.getElementById('greTotalSortiesVal').textContent = totalSorties;
 
   if(!inVeh.length) {
     document.getElementById('greState').innerHTML = '<div class="empty">Aucune munition active dans ce véhicule</div>';
@@ -495,29 +536,36 @@ function renderGreState() {
     document.getElementById('greState').innerHTML = html;
   }
 
-  // Bilan MO (Regroupé par type de munition + détails nominatifs)
+  // Bilan MO avec bouton de correction unitaire [ Rétablir ]
   const tirsVeh = (DB.tirsMO || []).filter(t => t.vehicule === curVeh);
   if(!tirsVeh.length) {
     document.getElementById('greBilanMO').innerHTML = '<div class="empty">Aucun tir enregistré pour ce véhicule</div>';
   } else {
     const byType = {};
     tirsVeh.forEach(t => {
-      if(!byType[t.type]) byType[t.type] = {total: 0, details: []};
+      if(!byType[t.type]) byType[t.type] = {total: 0, items: []};
       byType[t.type].total += t.qty;
       const p = allPers.find(x => x.id === t.persId) || {nom: 'Inconnu'};
-      byType[t.type].details.push(`${p.nom} (${t.qty})`);
+      byType[t.type].items.push({persId: t.persId, nom: p.nom, qty: t.qty});
     });
 
     let bilanHtml = '<div style="display:flex; flex-direction:column; gap:10px;">';
     Object.entries(byType).forEach(([typeId, data]) => {
       const gObj = LISTE_MUNITIONS.find(x => x.id === typeId);
       bilanHtml += `<div style="background:var(--card2); padding:10px 12px; border-radius:8px; font-size:14px;">
-                      <div style="display:flex; justify-content:space-between; font-weight:800; margin-bottom:4px;">
+                      <div style="display:flex; justify-content:space-between; font-weight:800; margin-bottom:6px; border-bottom:1px solid var(--line); padding-bottom:4px;">
                         <span>${gObj ? gObj.nom : typeId}</span>
                         <span style="color:var(--amber);">${data.total} au total</span>
                       </div>
-                      <div style="font-size:12px; color:var(--mut);">↳ ${data.details.join(', ')}</div>
-                    </div>`;
+                      <div style="display:flex; flex-direction:column; gap:6px; font-size:13px;">`;
+      
+      data.items.forEach(it => {
+        bilanHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--card); padding:4px 8px; border-radius:6px;">
+                        <span><b>${it.nom}</b> : ${it.qty} tirée(s)</span>
+                        <button class="pill" style="background:rgba(59,130,246,0.15); color:#93c5fd; border-color:rgba(59,130,246,0.3); padding:2px 8px; font-size:11px;" onclick="revertTir('${it.persId}', '${typeId}')">↺ Rétablir</button>
+                      </div>`;
+      });
+      bilanHtml += `</div></div>`;
     });
     bilanHtml += '</div>';
     document.getElementById('greBilanMO').innerHTML = bilanHtml;
