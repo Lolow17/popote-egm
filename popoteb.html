@@ -186,8 +186,15 @@
       <div class="card" style="margin-top:14px">
         <h2>État du véhicule <span id="lblVehState">BRAVO 1</span></h2>
         <div id="greState"></div>
-        <button class="btn sec" style="margin-top:14px; color:var(--red); border-color:rgba(239,68,68,0.3)" onclick="clearVeh()">Réintégrer (Vider le véhicule)</button>
       </div>
+
+      <!-- BILAN MO / TIRÉS -->
+      <div class="card" style="margin-top:14px; border-color:var(--amber)">
+        <h2>📊 Bilan MO (Munitions Tirées)</h2>
+        <div id="greBilanMO"></div>
+      </div>
+
+      <button class="btn sec" style="margin-top:14px; color:var(--red); border-color:rgba(239,68,68,0.3)" onclick="clearVeh()">Réintégrer tout le véhicule (Remise à zéro)</button>
     </div>
 
     <div id="greActive" style="display:none">
@@ -196,7 +203,6 @@
         <button class="chg" onclick="clearGrePers()">Changer</button>
       </div>
       
-      <!-- Liste des grenades à cliquer -->
       <div class="prodgrid" id="greProds"></div>
       
       <div class="runbar" id="greRunbar" style="display:none">
@@ -225,16 +231,14 @@
 
 <!-- Modals Popote... -->
 <div class="modal" id="mProd"><div class="sheet"><div class="grab"></div><h3>Produits & stock</h3><div id="prodEdit"></div><hr><label class="fl">Nouveau produit</label><input class="in" id="npNom" placeholder="ex. RedBull"><div class="addrow" style="margin-top:8px"><input class="in" id="npPrix" type="number" step="0.10" inputmode="decimal" placeholder="Prix €"><input class="in" id="npStock" type="number" inputmode="numeric" placeholder="Stock init."></div><button class="btn" style="margin-top:14px" onclick="addProd()">Ajouter le produit</button><button class="btn sec" style="margin-top:8px" onclick="closeModal('mProd')">Fermer</button></div></div>
-<div class="modal" id="mPers"><div class="sheet"><div class="grab"></div><h3>Personnel</h3><label class="fl">Ajouter une personne</label><input class="in" id="newPersNom" placeholder="NOM"><div class="addrow" style="margin-top:8px"><select class="in" id="newPersGrp"><option>PI</option><option>P2</option><option>P3</option><option>P4</option><option>PHR</option><option>À classer</option></select><button class="btn" style="width:auto;padding:13px 22px" onclick="addPers()">＋</button></div><hr><div id="persEdit"></div><button class="btn sec" style="margin-top:14px" onclick="closeModal('mPers')">Fermer</button></div></div>
+<div class="modal" id="mPers"><div class="sheet"><div class="grab"></div><h3>Personnel</h3><label class="fl>Ajouter une personne</label><input class="in" id="newPersNom" placeholder="NOM"><div class="addrow" style="margin-top:8px"><select class="in" id="newPersGrp"><option>PI</option><option>P2</option><option>P3</option><option>P4</option><option>PHR</option><option>À classer</option></select><button class="btn" style="width:auto;padding:13px 22px" onclick="addPers()">＋</button></div><hr><div id="persEdit"></div><button class="btn sec" style="margin-top:14px" onclick="closeModal('mPers')">Fermer</button></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
-// CONFIGURATION DE BASE
 const GROUPS=['PI','P2','P3','P4','PHR','À classer'];
 const NOMS=["ABALOS","ADY","AFONSO","ALIOUI","ATENCIA","AUBERT-CRAMOISY","AUDINET","BACHELET","BARTOLO","BAZIN","BELE","BELTRAN","BERTELOT","BICHON","BIEDERMANN","BONNEVILLE","BOUAICHAOUI","BURBAN","CAILLABA","CAILLERE","CATTEAU","CAUVIN","CHALOUAS","CHANDERNAGOR","CHAPON","CHARLEMEIN","CHATIN DE C","CLERC","COLLIN","CORADI","CORBIN","CORNU","COURILLEAU","COSTABELLO","DELHOMME","DELORME","DESLAVIER","DHOYER","DIDELOT","DOLEANS","DOMINGO","DORVAL","DULAC","COMMON","FAJOU","FROIDEFOND","GILLARD","GILLET","GODEFROY","GOURGUECHON","GRAFFION","GUICHARD","HOCHART","HUG-AUGENDRE","INASSIMOUTOU","ISSOUFFI","LACOMBE","LAMRABET","LEBEAU","LE DRIANT","LELIEVRE","LEMAITRE","LOFFREDA","LOUETTE","MAMBERTI","MARIE","MARTIN STE","MARTINS","MARTY","MERCIER K","MEUDAL","MOUSSA","MOUSSOILI","MURAT","NAVA","NUNES","OHAYON","PERDREAU","PERSON","PETITFILS","RAGAIGNE","PIRIOTUA","RAGNET","ROBET","RICHARD","ROCHEMONT","RONNEL","ROUX","SAINTE-BEUVE","SAINT-ÉLOI","SAIKALI","SCHATTEMAN","SNOEK","TERIIPAIA","TETUAITEROI","TIBERE","TROUSSICOT","VALADEZ","VAUTIER","VENTURA PEREIRA","VERMERSCH","WACHEUX","WILLERS","YUTH","ZEROUAL","ZUBANOVIC"];
 const DEFAULT_PRODS=[{id:'p_rb',nom:'RedBull',prix:2.00,stock:0},{id:'p_soda',nom:'Boisson (canette)',prix:1.00,stock:0},{id:'p_eau',nom:'Eau',prix:0.50,stock:0},{id:'p_barre',nom:'Barre',prix:1.00,stock:0}];
 
-// MUNITIONS LIST
 const LISTE_MUNITIONS = [
   {id:'g_cm6_main', nom:'CM6/MP7 (Main)'},
   {id:'g_cm6_50', nom:'CM6/MP7 (DPR 50m)'},
@@ -246,11 +250,10 @@ const LISTE_MUNITIONS = [
   {id:'g_genl_main', nom:'GENL (Main)'}
 ];
 
-const API_URL = "https://script.google.com/macros/s/AKfycbxqaKr2-fz9wg43lqbwSqOtl64PSfV118FEi44S5YVIg7BJQtCN_CMu8w05AixGw1B2/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbzhXoqZUE4AbPuPeFboSD2u2D14Xo7-oFQyXPcMNUtcf0TNXFI2wM-lCk1xfH167-sH/exec";
 const KEY_PROD='popote:prods', KEY_PERS='popote:pers', KEY_CONSO='popote:consos', KEY_MONTH='popote:month', KEY_GRE='popote:grenades';
 let DB=null;
 
-// OUTILS GENERAUX
 function setSync(ok){document.getElementById('syncDot').className='dot'+(ok?'':' off');document.getElementById('syncTxt').textContent=ok?'Synchro':'Erreur';}
 async function sSet(k, v){try {await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: k, data: v }), headers: { 'Content-Type': 'text/plain;charset=utf-8' } });setSync(true);} catch(e) { setSync(false); }}
 function money(n){return n.toFixed(2).replace('.',',')+' €';}
@@ -267,9 +270,6 @@ async function loadDB(){
   } catch(e) { alert("Erreur serveur"); }
 }
 
-// -----------------------------------------------------
-// LOGIQUE POPOTE (Déjà existante)
-// -----------------------------------------------------
 let curPers=null, run={};
 function prodRank(){const cnt={};DB.prods.forEach(p=>cnt[p.id]=0);DB.consos.forEach(c=>{if(cnt[c.prodId]!=null)cnt[c.prodId]+=c.qty;});return DB.prods.slice().sort((a,b)=>(cnt[b.id]||0)-(cnt[a.id]||0)).map(p=>({...p,used:cnt[p.id]||0}));}
 function renderPersSearch(){const q=document.getElementById('persSearch').value.trim().toLowerCase();const list=DB.pers.filter(p=>p.nom.toLowerCase().includes(q)).sort((a,b)=>a.nom.localeCompare(b.nom)).slice(0,40);document.getElementById('persResults').innerHTML=list.map(p=>`<div class="presult" onclick="selPers('${p.id}')"><span class="nm">${p.nom}</span><span class="gg">${p.grp||''}</span></div>`).join('')||'<div class="empty">Aucun nom trouvé</div>';}
@@ -290,7 +290,7 @@ function renderStock(){document.getElementById('stList').innerHTML=DB.prods.map(
 async function stockStep(id,d){const p=DB.prods.find(x=>x.id===id);p.stock=Math.max(0,p.stock+d);await sSet(KEY_PROD,DB.prods);renderStock();if(curPers)renderProds();}
 
 // -----------------------------------------------------
-// NOUVELLE LOGIQUE : MUNITIONS / VÉHICULES
+// LOGIQUE MUNITIONS / VÉHICULES (DÉCREMENTATION UNIQUE POUR TIRÉ)
 // -----------------------------------------------------
 let curVeh = 'B1';
 let curGrePers = null;
@@ -308,7 +308,6 @@ function setVeh(v) {
 
 function renderGreSearch() {
   const q = document.getElementById('greSearch').value.trim().toLowerCase();
-  // On ajoute les faux personnels SAC LG B1 et B2 à la liste pour pouvoir les chercher
   const listSacs = [{id:'u_sac_b1', nom:'SAC LG BRAVO 1', grp:'MATÉRIEL'}, {id:'u_sac_b2', nom:'SAC LG BRAVO 2', grp:'MATÉRIEL'}];
   const allPers = [...DB.pers, ...listSacs];
   const list = allPers.filter(p => p.nom.toLowerCase().includes(q)).sort((a,b) => a.nom.localeCompare(b.nom)).slice(0,40);
@@ -322,7 +321,7 @@ function renderGreSearch() {
 
 function selGrePers(id, nom, grp) {
   curGrePers = {id: id, nom: nom, grp: grp};
-  runGre = {}; // reset current selection
+  runGre = {};
   document.getElementById('grePick').style.display = 'none';
   document.getElementById('greActive').style.display = 'block';
   document.getElementById('gaAv').textContent = initials(nom);
@@ -345,10 +344,7 @@ function renderGreProds() {
     const q = runGre[g.id] || 0;
     const isDPR = g.id.includes('50') || g.id.includes('100') || g.id.includes('200');
     const isGM = g.id.includes('gm2l');
-    
-    // Code couleur tactique
-    let bdColor = '';
-    let bClass = '';
+    let bdColor = ''; let bClass = '';
     if (isGM) { bdColor = 'border-color:var(--red);'; bClass = 'background:var(--red)'; }
     else if (isDPR) { bdColor = 'border-color:var(--accent);'; }
     
@@ -405,7 +401,6 @@ async function commitGre() {
   if(!items.length) return;
   
   items.forEach(([typeId, q]) => {
-    // Vérifier si la personne a déjà ce type de grenade dans ce véhicule
     const existing = DB.grenades.find(x => x.persId === curGrePers.id && x.vehicule === curVeh && x.type === typeId);
     if(existing) {
       existing.qty += q;
@@ -427,59 +422,113 @@ async function commitGre() {
   renderGreState();
 }
 
-function renderGreState() {
-  const inVeh = DB.grenades.filter(g => g.vehicule === curVeh);
-  if(!inVeh.length) {
-    document.getElementById('greState').innerHTML = '<div class="empty">Aucune munition distribuée dans ce véhicule</div>';
-    return;
+// GESTION ACTION : TIRÉ (décrémente de 1) OU RÉINTÉGRÉ (efface tout d'un coup)
+async function actionGreItem(id, actionType) {
+  const item = DB.grenades.find(x => x.id === id);
+  if(!item) return;
+
+  if (actionType === 'tire') {
+    if(!DB.tirsMO) DB.tirsMO = [];
+    const existingTir = DB.tirsMO.find(x => x.vehicule === curVeh && x.persId === item.persId && x.type === item.type);
+    if(existingTir) {
+      existingTir.qty += 1;
+    } else {
+      DB.tirsMO.push({
+        id: 't' + Date.now() + Math.random().toString(36).slice(2,5),
+        vehicule: curVeh,
+        persId: item.persId,
+        type: item.type,
+        qty: 1
+      });
+    }
+
+    // Décrémenter de 1 seulement pour Tiré
+    item.qty -= 1;
+    if(item.qty <= 0) {
+      DB.grenades = DB.grenades.filter(x => x.id !== id);
+    }
+    toast('💥 1 munition comptabilisée comme TIRÉE');
+  } else {
+    // Pour Réintégré : on retire toute la ligne d'un coup
+    DB.grenades = DB.grenades.filter(x => x.id !== id);
+    toast('🔄 Munitions réintégrées');
+  }
+
+  await sSet(KEY_GRE, DB.grenades);
+  if(actionType === 'tire') {
+    await sSet('popote:tirsMO', DB.tirsMO);
   }
   
-  // Regrouper par personne
-  const byPers = {};
-  inVeh.forEach(g => {
-    if(!byPers[g.persId]) byPers[g.persId] = [];
-    byPers[g.persId].push(g);
-  });
-  
-  const listSacs = [{id:'u_sac_b1', nom:'SAC LG BRAVO 1'}, {id:'u_sac_b2', nom:'SAC LG BRAVO 2'}];
-  const allPers = [...DB.pers, ...listSacs];
-  
-  let html = '';
-  Object.entries(byPers).forEach(([pId, listItems]) => {
-    const p = allPers.find(x => x.id === pId) || {nom: 'Inconnu'};
-    html += `<div class="row" style="align-items:flex-start; flex-direction:column; padding:16px 0;">
-               <div class="name" style="color:var(--accent); font-size:15px; margin-bottom:8px;">▸ ${p.nom}</div>
-               <div style="width:100%; display:flex; flex-direction:column; gap:8px; padding-left:10px;">`;
-               
-    listItems.forEach(g => {
-      const gObj = LISTE_MUNITIONS.find(x => x.id === g.type);
-      html += `<div style="display:flex; align-items:center; justify-content:space-between; width:100%; font-size:14px; background:var(--card2); padding:6px 12px; border-radius:8px;">
-                 <span style="font-weight:600;">${g.qty} × ${gObj ? gObj.nom : g.type}</span>
-                 <button class="del" onclick="delGre('${g.id}')" style="font-size:18px; padding:0 8px; color:var(--mut2)">×</button>
-               </div>`;
-    });
-    html += `</div></div>`;
-  });
-  document.getElementById('greState').innerHTML = html;
+  renderGreState();
 }
 
-async function delGre(id) {
-  if(!confirm('Retirer cette munition ?')) return;
-  DB.grenades = DB.grenades.filter(g => g.id !== id);
-  await sSet(KEY_GRE, DB.grenades);
-  renderGreState();
+function renderGreState() {
+  const inVeh = DB.grenades.filter(g => g.vehicule === curVeh);
+  const listSacs = [{id:'u_sac_b1', nom:'SAC LG BRAVO 1'}, {id:'u_sac_b2', nom:'SAC LG BRAVO 2'}];
+  const allPers = [...DB.pers, ...listSacs];
+
+  if(!inVeh.length) {
+    document.getElementById('greState').innerHTML = '<div class="empty">Aucune munition active dans ce véhicule</div>';
+  } else {
+    const byPers = {};
+    inVeh.forEach(g => {
+      if(!byPers[g.persId]) byPers[g.persId] = [];
+      byPers[g.persId].push(g);
+    });
+    
+    let html = '';
+    Object.entries(byPers).forEach(([pId, listItems]) => {
+      const p = allPers.find(x => x.id === pId) || {nom: 'Inconnu'};
+      html += `<div class="row" style="align-items:flex-start; flex-direction:column; padding:14px 0;">
+                 <div class="name" style="color:var(--accent); font-size:15px; margin-bottom:8px;">▸ ${p.nom}</div>
+                 <div style="width:100%; display:flex; flex-direction:column; gap:8px; padding-left:6px;">`;
+                 
+      listItems.forEach(g => {
+        const gObj = LISTE_MUNITIONS.find(x => x.id === g.type);
+        html += `<div style="display:flex; align-items:center; justify-content:space-between; width:100%; font-size:13px; background:var(--card2); padding:6px 12px; border-radius:8px;">
+                   <span style="font-weight:600;">${g.qty} × ${gObj ? gObj.nom : g.type}</span>
+                   <div style="display:flex; gap:6px;">
+                     <button class="pill" style="background:rgba(239,68,68,0.15); color:#fca5a5; border-color:rgba(239,68,68,0.3); padding:4px 10px;" onclick="actionGreItem('${g.id}', 'tire')">💥 Tiré (-1)</button>
+                     <button class="pill" style="background:rgba(34,197,94,0.15); color:#4ade80; border-color:rgba(34,197,94,0.3); padding:4px 10px;" onclick="actionGreItem('${g.id}', 'reintegre')">🔄 Réintégré (Tout)</button>
+                   </div>
+                 </div>`;
+      });
+      html += `</div></div>`;
+    });
+    document.getElementById('greState').innerHTML = html;
+  }
+
+  const tirsVeh = (DB.tirsMO || []).filter(t => t.vehicule === curVeh);
+  if(!tirsVeh.length) {
+    document.getElementById('greBilanMO').innerHTML = '<div class="empty">Aucun tir enregistré pour ce véhicule</div>';
+  } else {
+    const sumTirs = {};
+    tirsVeh.forEach(t => {
+      sumTirs[t.type] = (sumTirs[t.type] || 0) + t.qty;
+    });
+
+    let bilanHtml = '<div style="display:flex; flex-direction:column; gap:6px;">';
+    Object.entries(sumTirs).forEach(([typeId, qTot]) => {
+      const gObj = LISTE_MUNITIONS.find(x => x.id === typeId);
+      bilanHtml += `<div style="display:flex; justify-content:space-between; background:var(--card2); padding:8px 12px; border-radius:8px; font-size:14px;">
+                      <span style="font-weight:600;">${gObj ? gObj.nom : typeId}</span>
+                      <span style="font-weight:800; color:var(--amber);">${qTot} tirée(s)</span>
+                    </div>`;
+    });
+    bilanHtml += '</div>';
+    document.getElementById('greBilanMO').innerHTML = bilanHtml;
+  }
 }
 
 async function clearVeh() {
-  if(!confirm(`⚠️ Tu es sur le point de Vider tout le véhicule ${curVeh === 'B1' ? 'BRAVO 1' : 'BRAVO 2'} et de réintégrer les munitions. Confirmer ?`)) return;
+  if(!confirm(`⚠️ Vider entièrement le véhicule ${curVeh === 'B1' ? 'BRAVO 1' : 'BRAVO 2'} ?`)) return;
   DB.grenades = DB.grenades.filter(g => g.vehicule !== curVeh);
   await sSet(KEY_GRE, DB.grenades);
   renderGreState();
-  toast('Véhicule réintégré avec succès');
+  toast('Véhicule réintégré');
 }
 
-
-// --- GESTION DES OUTILS RESTANTS ---
+// OUTILS RESTANTS
 function openProdModal(){renderProdEdit();openModal('mProd');}
 function renderProdEdit(){document.getElementById('prodEdit').innerHTML=DB.prods.map(p=>`<div style="padding:10px 0;border-bottom:1px solid var(--line)"><div style="display:flex;gap:8px;align-items:center"><input class="in" style="flex:1" value="${p.nom}" onchange="editProd('${p.id}','nom',this.value)"><button class="del" onclick="delProd('${p.id}')">🗑</button></div><div class="addrow" style="margin-top:8px"><input class="in" type="number" step="0.10" inputmode="decimal" value="${p.prix}" onchange="editProd('${p.id}','prix',parseFloat(this.value)||0)" placeholder="Prix €"><input class="in" type="number" inputmode="numeric" value="${p.stock}" onchange="editProd('${p.id}','stock',parseInt(this.value)||0)" placeholder="Stock"></div></div>`).join('');}
 async function editProd(id,f,v){const p=DB.prods.find(x=>x.id===id);p[f]=v;await sSet(KEY_PROD,DB.prods);if(curPers)renderProds();renderStock();}
