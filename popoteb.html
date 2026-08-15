@@ -188,7 +188,7 @@
         <div id="greState"></div>
       </div>
 
-      <!-- BILAN MO / TIRÉS -->
+      <!-- BILAN MO / TIRÉS (AVEC DÉTAIL NOMINATIF) -->
       <div class="card" style="margin-top:14px; border-color:var(--amber)">
         <h2>📊 Bilan MO (Munitions Tirées)</h2>
         <div id="greBilanMO"></div>
@@ -231,7 +231,7 @@
 
 <!-- Modals Popote... -->
 <div class="modal" id="mProd"><div class="sheet"><div class="grab"></div><h3>Produits & stock</h3><div id="prodEdit"></div><hr><label class="fl">Nouveau produit</label><input class="in" id="npNom" placeholder="ex. RedBull"><div class="addrow" style="margin-top:8px"><input class="in" id="npPrix" type="number" step="0.10" inputmode="decimal" placeholder="Prix €"><input class="in" id="npStock" type="number" inputmode="numeric" placeholder="Stock init."></div><button class="btn" style="margin-top:14px" onclick="addProd()">Ajouter le produit</button><button class="btn sec" style="margin-top:8px" onclick="closeModal('mProd')">Fermer</button></div></div>
-<div class="modal" id="mPers"><div class="sheet"><div class="grab"></div><h3>Personnel</h3><label class="fl>Ajouter une personne</label><input class="in" id="newPersNom" placeholder="NOM"><div class="addrow" style="margin-top:8px"><select class="in" id="newPersGrp"><option>PI</option><option>P2</option><option>P3</option><option>P4</option><option>PHR</option><option>À classer</option></select><button class="btn" style="width:auto;padding:13px 22px" onclick="addPers()">＋</button></div><hr><div id="persEdit"></div><button class="btn sec" style="margin-top:14px" onclick="closeModal('mPers')">Fermer</button></div></div>
+<div class="modal" id="mPers"><div class="sheet"><div class="grab"></div><h3>Personnel</h3><label class="fl">Ajouter une personne</label><input class="in" id="newPersNom" placeholder="NOM"><div class="addrow" style="margin-top:8px"><select class="in" id="newPersGrp"><option>PI</option><option>P2</option><option>P3</option><option>P4</option><option>PHR</option><option>À classer</option></select><button class="btn" style="width:auto;padding:13px 22px" onclick="addPers()">＋</button></div><hr><div id="persEdit"></div><button class="btn sec" style="margin-top:14px" onclick="closeModal('mPers')">Fermer</button></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -250,7 +250,7 @@ const LISTE_MUNITIONS = [
   {id:'g_genl_main', nom:'GENL (Main)'}
 ];
 
-const API_URL = "https://script.google.com/macros/s/AKfycbxqaKr2-fz9wg43lqbwSqOtl64PSfV118FEi44S5YVIg7BJQtCN_CMu8w05AixGw1B2/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbzhXoqZUE4AbPuPeFboSD2u2D14Xo7-oFQyXPcMNUtcf0TNXFI2wM-lCk1xfH167-sH/exec";
 const KEY_PROD='popote:prods', KEY_PERS='popote:pers', KEY_CONSO='popote:consos', KEY_MONTH='popote:month', KEY_GRE='popote:grenades';
 let DB=null;
 
@@ -290,7 +290,7 @@ function renderStock(){document.getElementById('stList').innerHTML=DB.prods.map(
 async function stockStep(id,d){const p=DB.prods.find(x=>x.id===id);p.stock=Math.max(0,p.stock+d);await sSet(KEY_PROD,DB.prods);renderStock();if(curPers)renderProds();}
 
 // -----------------------------------------------------
-// LOGIQUE MUNITIONS / VÉHICULES (DÉCREMENTATION UNIQUE POUR TIRÉ)
+// LOGIQUE MUNITIONS / VÉHICULES (BILAN MO AVEC DÉTAIL NOMINATIF)
 // -----------------------------------------------------
 let curVeh = 'B1';
 let curGrePers = null;
@@ -422,7 +422,6 @@ async function commitGre() {
   renderGreState();
 }
 
-// GESTION ACTION : TIRÉ (décrémente de 1) OU RÉINTÉGRÉ (efface tout d'un coup)
 async function actionGreItem(id, actionType) {
   const item = DB.grenades.find(x => x.id === id);
   if(!item) return;
@@ -442,14 +441,12 @@ async function actionGreItem(id, actionType) {
       });
     }
 
-    // Décrémenter de 1 seulement pour Tiré
     item.qty -= 1;
     if(item.qty <= 0) {
       DB.grenades = DB.grenades.filter(x => x.id !== id);
     }
     toast('💥 1 munition comptabilisée comme TIRÉE');
   } else {
-    // Pour Réintégré : on retire toute la ligne d'un coup
     DB.grenades = DB.grenades.filter(x => x.id !== id);
     toast('🔄 Munitions réintégrées');
   }
@@ -498,21 +495,28 @@ function renderGreState() {
     document.getElementById('greState').innerHTML = html;
   }
 
+  // Bilan MO (Regroupé par type de munition + détails nominatifs)
   const tirsVeh = (DB.tirsMO || []).filter(t => t.vehicule === curVeh);
   if(!tirsVeh.length) {
     document.getElementById('greBilanMO').innerHTML = '<div class="empty">Aucun tir enregistré pour ce véhicule</div>';
   } else {
-    const sumTirs = {};
+    const byType = {};
     tirsVeh.forEach(t => {
-      sumTirs[t.type] = (sumTirs[t.type] || 0) + t.qty;
+      if(!byType[t.type]) byType[t.type] = {total: 0, details: []};
+      byType[t.type].total += t.qty;
+      const p = allPers.find(x => x.id === t.persId) || {nom: 'Inconnu'};
+      byType[t.type].details.push(`${p.nom} (${t.qty})`);
     });
 
-    let bilanHtml = '<div style="display:flex; flex-direction:column; gap:6px;">';
-    Object.entries(sumTirs).forEach(([typeId, qTot]) => {
+    let bilanHtml = '<div style="display:flex; flex-direction:column; gap:10px;">';
+    Object.entries(byType).forEach(([typeId, data]) => {
       const gObj = LISTE_MUNITIONS.find(x => x.id === typeId);
-      bilanHtml += `<div style="display:flex; justify-content:space-between; background:var(--card2); padding:8px 12px; border-radius:8px; font-size:14px;">
-                      <span style="font-weight:600;">${gObj ? gObj.nom : typeId}</span>
-                      <span style="font-weight:800; color:var(--amber);">${qTot} tirée(s)</span>
+      bilanHtml += `<div style="background:var(--card2); padding:10px 12px; border-radius:8px; font-size:14px;">
+                      <div style="display:flex; justify-content:space-between; font-weight:800; margin-bottom:4px;">
+                        <span>${gObj ? gObj.nom : typeId}</span>
+                        <span style="color:var(--amber);">${data.total} au total</span>
+                      </div>
+                      <div style="font-size:12px; color:var(--mut);">↳ ${data.details.join(', ')}</div>
                     </div>`;
     });
     bilanHtml += '</div>';
