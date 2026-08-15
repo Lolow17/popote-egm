@@ -54,7 +54,7 @@
   .persSel .grp{font-size:11px;color:var(--mut);font-weight:600;background:var(--card2);padding:3px 9px;border-radius:20px}
   .persSel .chg{color:var(--accent);font-size:13px;font-weight:600;background:none;border:none;cursor:pointer;padding:6px}
   .searchbox{position:relative;margin-bottom:10px}
-  .results{max-height:300px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .results{max-height:280px;overflow-y:auto;-webkit-overflow-scrolling:touch}
   .presult{padding:13px 14px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;
     align-items:center;justify-content:space-between;transition:background .1s}
   .presult:active{background:var(--card2)}
@@ -116,7 +116,7 @@
   .seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:var(--r2);padding:4px;margin-bottom:14px}
   .seg button{flex:1;background:none;border:none;color:var(--mut);padding:9px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
   .seg button.active{background:var(--accent);color:#fff}
-  .empty{text-align:center;color:var(--mut2);padding:36px 10px;font-size:14px}
+  .empty{text-align:center;color:var(--mut2);padding:20px 10px;font-size:14px}
   .toast{position:fixed;bottom:calc(90px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(10px);
     background:var(--green);color:#fff;padding:11px 22px;border-radius:24px;font-size:14px;font-weight:700;z-index:200;
     opacity:0;transition:.25s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
@@ -138,8 +138,8 @@
     <div id="persPick">
       <div class="card">
         <h2>Qui consomme ?</h2>
-        <div class="searchbox"><input class="in" id="persSearch" placeholder="🔍 Rechercher un nom..." autocomplete="off"></div>
-        <div class="results" id="persResults"></div>
+        <div class="searchbox"><input class="in" id="persSearch" placeholder="🔍 Rechercher par nom..." autocomplete="off"></div>
+        <div id="persGroupsContainer" class="results" style="max-height:380px;"></div>
       </div>
     </div>
     <div id="persActive" style="display:none">
@@ -180,8 +180,8 @@
     <div id="grePick">
       <div class="card">
         <h2>À qui distribuer ? (<span id="lblVehActive">BRAVO 1</span>)</h2>
-        <div class="searchbox"><input class="in" id="greSearch" placeholder="🔍 Rechercher un nom ou SAC..." autocomplete="off"></div>
-        <div class="results" id="greResults"></div>
+        <div class="searchbox"><input class="in" id="greSearch" placeholder="🔍 Rechercher par nom..." autocomplete="off"></div>
+        <div id="greGroupsContainer" class="results" style="max-height:380px;"></div>
       </div>
       <div class="card" style="margin-top:14px">
         <h2>État du véhicule <span id="lblVehState">BRAVO 1</span></h2>
@@ -192,7 +192,7 @@
         <div id="greState"></div>
       </div>
 
-      <!-- BILAN MO / TIRÉS (AVEC CORRECTION D'ERREUR) -->
+      <!-- BILAN MO / TIRÉS -->
       <div class="card" style="margin-top:14px; border-color:var(--amber)">
         <h2>📊 Bilan MO (Munitions Tirées)</h2>
         <div id="greBilanMO"></div>
@@ -276,9 +276,46 @@ async function loadDB(){
 
 let curPers=null, run={};
 function prodRank(){const cnt={};DB.prods.forEach(p=>cnt[p.id]=0);DB.consos.forEach(c=>{if(cnt[c.prodId]!=null)cnt[c.prodId]+=c.qty;});return DB.prods.slice().sort((a,b)=>(cnt[b.id]||0)-(cnt[a.id]||0)).map(p=>({...p,used:cnt[p.id]||0}));}
-function renderPersSearch(){const q=document.getElementById('persSearch').value.trim().toLowerCase();const list=DB.pers.filter(p=>p.nom.toLowerCase().includes(q)).sort((a,b)=>a.nom.localeCompare(b.nom)).slice(0,40);document.getElementById('persResults').innerHTML=list.map(p=>`<div class="presult" onclick="selPers('${p.id}')"><span class="nm">${p.nom}</span><span class="gg">${p.grp||''}</span></div>`).join('')||'<div class="empty">Aucun nom trouvé</div>';}
+
+// AFFICHAGE LISTE POPOTE PAR GROUPES (AVEC RECHERCHE)
+function renderPersGroups() {
+  const q = document.getElementById('persSearch').value.trim().toLowerCase();
+  const byGrp = {};
+  GROUPS.forEach(g => byGrp[g] = []);
+  
+  DB.pers.forEach(p => {
+    if(!q || p.nom.toLowerCase().includes(q)) {
+      const g = p.grp || 'À classer';
+      if(byGrp[g]) byGrp[g].push(p);
+      else { byGrp['À classer'] = byGrp['À classer'] || []; byGrp['À classer'].push(p); }
+    }
+  });
+
+  let html = '';
+  GROUPS.forEach(g => {
+    const list = byGrp[g];
+    if(!list || !list.length) return;
+    list.sort((a,b) => a.nom.localeCompare(b.nom));
+    
+    // Si on tape dans la recherche, on ouvre automatiquement les groupes
+    const isOpen = q ? 'open' : '';
+    
+    html += `<div class="grp ${isOpen}">
+               <div class="grph" onclick="this.parentElement.classList.toggle('open')">
+                 <span><span class="chev">▸</span>${g} <span class="cnt">· ${list.length}</span></span>
+               </div>
+               <div class="grpbody">`;
+    list.forEach(p => {
+      html += `<div class="presult" onclick="selPers('${p.id}')"><span class="nm">${p.nom}</span><span class="gg">${p.grp||''}</span></div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  document.getElementById('persGroupsContainer').innerHTML = html || '<div class="empty">Aucun nom trouvé</div>';
+}
+
 function selPers(id){curPers=DB.pers.find(p=>p.id===id);run={};document.getElementById('persPick').style.display='none';document.getElementById('persActive').style.display='block';document.getElementById('paAv').textContent=initials(curPers.nom);document.getElementById('paNom').textContent=curPers.nom;document.getElementById('paGrp').textContent=curPers.grp||'À classer';renderProds();}
-function clearPers(){curPers=null;run={};document.getElementById('persActive').style.display='none';document.getElementById('persPick').style.display='block';document.getElementById('persSearch').value='';renderPersSearch();}
+function clearPers(){curPers=null;run={};document.getElementById('persActive').style.display='none';document.getElementById('persPick').style.display='block';document.getElementById('persSearch').value='';renderPersGroups();}
 function renderProds(){const ranked=prodRank();document.getElementById('csProds').innerHTML=ranked.map(p=>{const q=run[p.id]||0;const low=p.stock<=5;return `<div class="pcard" id="pc_${p.id}" data-id="${p.id}">${p.used>0?'<span class="fav">★</span>':''}<span class="stk ${low?'low':''}">${p.stock}</span><div class="pn">${p.nom}</div><div class="pp">${money(p.prix)}</div><span class="badge ${q>0?'on':''}" id="bd_${p.id}">${q}</span></div>`;}).join('');updateRunbar();}
 function bumpProd(id,d){run[id]=Math.max(0,(run[id]||0)+d);if(run[id]===0)delete run[id];const bd=document.getElementById('bd_'+id);const q=run[id]||0;bd.textContent=q;bd.classList.toggle('on',q>0);if(d>0){const pc=document.getElementById('pc_'+id);pc.classList.add('flash');setTimeout(()=>pc.classList.remove('flash'),200);}updateRunbar();}
 let lpTimer=null,lpFired=false;
@@ -294,7 +331,7 @@ function renderStock(){document.getElementById('stList').innerHTML=DB.prods.map(
 async function stockStep(id,d){const p=DB.prods.find(x=>x.id===id);p.stock=Math.max(0,p.stock+d);await sSet(KEY_PROD,DB.prods);renderStock();if(curPers)renderProds();}
 
 // -----------------------------------------------------
-// LOGIQUE MUNITIONS / VÉHICULES (BILAN MO AVEC CORRECTION D'ERREUR)
+// LOGIQUE MUNITIONS / VÉHICULES (PAR GROUPES + SAC LG)
 // -----------------------------------------------------
 let curVeh = 'B1';
 let curGrePers = null;
@@ -307,20 +344,49 @@ function setVeh(v) {
   document.querySelector(`#vehToggle button[data-veh="${v}"]`).classList.add('active');
   document.getElementById('lblVehActive').textContent = (v === 'B1' ? 'BRAVO 1' : 'BRAVO 2');
   document.getElementById('lblVehState').textContent = (v === 'B1' ? 'BRAVO 1' : 'BRAVO 2');
-  renderGreState();
+  renderGreGroups();
 }
 
-function renderGreSearch() {
+function renderGreGroups() {
   const q = document.getElementById('greSearch').value.trim().toLowerCase();
-  const listSacs = [{id:'u_sac_b1', nom:'SAC LG BRAVO 1', grp:'MATÉRIEL'}, {id:'u_sac_b2', nom:'SAC LG BRAVO 2', grp:'MATÉRIEL'}];
+  const listSacs = [
+    {id:'u_sac_b1', nom:'SAC LG BRAVO 1', grp:'MATÉRIEL'}, 
+    {id:'u_sac_b2', nom:'SAC LG BRAVO 2', grp:'MATÉRIEL'}
+  ];
   const allPers = [...DB.pers, ...listSacs];
-  const list = allPers.filter(p => p.nom.toLowerCase().includes(q)).sort((a,b) => a.nom.localeCompare(b.nom)).slice(0,40);
+  const groupsGre = ['MATÉRIEL', ...GROUPS];
   
-  document.getElementById('greResults').innerHTML = list.map(p => 
-    `<div class="presult" onclick="selGrePers('${p.id}', '${p.nom.replace(/'/g, "\\'")}', '${p.grp||''}')">
-      <span class="nm">${p.nom}</span><span class="gg">${p.grp||''}</span>
-     </div>`
-  ).join('') || '<div class="empty">Aucun nom trouvé</div>';
+  const byGrp = {};
+  groupsGre.forEach(g => byGrp[g] = []);
+
+  allPers.forEach(p => {
+    if(!q || p.nom.toLowerCase().includes(q)) {
+      const g = p.grp || 'À classer';
+      if(byGrp[g]) byGrp[g].push(p);
+      else { byGrp['À classer'] = byGrp['À classer'] || []; byGrp['À classer'].push(p); }
+    }
+  });
+
+  let html = '';
+  groupsGre.forEach(g => {
+    const list = byGrp[g];
+    if(!list || !list.length) return;
+    list.sort((a,b) => a.nom.localeCompare(b.nom));
+
+    const isOpen = q ? 'open' : '';
+
+    html += `<div class="grp ${isOpen}">
+               <div class="grph" onclick="this.parentElement.classList.toggle('open')">
+                 <span><span class="chev">▸</span>${g} <span class="cnt">· ${list.length}</span></span>
+               </div>
+               <div class="grpbody">`;
+    list.forEach(p => {
+      html += `<div class="presult" onclick="selGrePers('${p.id}', '${p.nom.replace(/'/g, "\\'")}', '${p.grp||''}')"><span class="nm">${p.nom}</span><span class="gg">${p.grp||''}</span></div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  document.getElementById('greGroupsContainer').innerHTML = html || '<div class="empty">Aucun nom trouvé</div>';
 }
 
 function selGrePers(id, nom, grp) {
@@ -340,7 +406,7 @@ function clearGrePers() {
   document.getElementById('greActive').style.display = 'none';
   document.getElementById('grePick').style.display = 'block';
   document.getElementById('greSearch').value = '';
-  renderGreSearch();
+  renderGreGroups();
 }
 
 function renderGreProds() {
@@ -463,19 +529,16 @@ async function actionGreItem(id, actionType) {
   renderGreState();
 }
 
-// FONCTION DE CORRECTION (RETOUR ARRIÈRE DEPUIS LE BILAN MO)
 async function revertTir(persId, typeId) {
   if(!DB.tirsMO) return;
   const tirRecord = DB.tirsMO.find(t => t.vehicule === curVeh && t.persId === persId && t.type === typeId);
   if(!tirRecord) return;
 
-  // 1. Retirer 1 du bilan MO
   tirRecord.qty -= 1;
   if(tirRecord.qty <= 0) {
     DB.tirsMO = DB.tirsMO.filter(t => t.id !== tirRecord.id);
   }
 
-  // 2. Remettre la munition en stock entre les mains de la personne dans le véhicule
   const activeItem = DB.grenades.find(g => g.vehicule === curVeh && g.persId === persId && g.type === typeId);
   if(activeItem) {
     activeItem.qty += 1;
@@ -500,7 +563,6 @@ function renderGreState() {
   const listSacs = [{id:'u_sac_b1', nom:'SAC LG BRAVO 1', grp:'MATÉRIEL'}, {id:'u_sac_b2', nom:'SAC LG BRAVO 2', grp:'MATÉRIEL'}];
   const allPers = [...DB.pers, ...listSacs];
 
-  // Calcul du total des munitions sorties (en circulation active dans le véhicule)
   let totalSorties = 0;
   inVeh.forEach(g => totalSorties += g.qty);
   document.getElementById('greTotalSortiesVal').textContent = totalSorties;
@@ -536,7 +598,6 @@ function renderGreState() {
     document.getElementById('greState').innerHTML = html;
   }
 
-  // Bilan MO avec bouton de correction unitaire [ Rétablir ]
   const tirsVeh = (DB.tirsMO || []).filter(t => t.vehicule === curVeh);
   if(!tirsVeh.length) {
     document.getElementById('greBilanMO').innerHTML = '<div class="empty">Aucun tir enregistré pour ce véhicule</div>';
@@ -606,7 +667,7 @@ document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',
   if(b.dataset.v==='bilan') renderBilan();
   if(b.dataset.v==='stock') renderStock();
   if(b.dataset.v==='conso') renderLog();
-  if(b.dataset.v==='grenades') { renderGreSearch(); renderGreState(); }
+  if(b.dataset.v==='grenades') { renderGreGroups(); renderGreState(); }
 }));
 
 document.querySelectorAll('.seg button[data-f]').forEach(b=>b.addEventListener('click',()=>{
@@ -614,15 +675,15 @@ document.querySelectorAll('.seg button[data-f]').forEach(b=>b.addEventListener('
   b.classList.add('active'); blFilter=b.dataset.f; renderBilan();
 }));
 
-document.getElementById('persSearch').addEventListener('input',renderPersSearch);
-document.getElementById('greSearch').addEventListener('input',renderGreSearch);
+document.getElementById('persSearch').addEventListener('input',renderPersGroups);
+document.getElementById('greSearch').addEventListener('input',renderGreGroups);
 
 function renderAll(){
-  renderPersSearch();
+  renderPersGroups();
   renderLog();
   renderBilan();
   renderStock();
-  renderGreSearch();
+  renderGreGroups();
   renderGreState();
 }
 (async()=>{await loadDB(); attachProdEvents(); attachGreEvents(); renderAll();})();
