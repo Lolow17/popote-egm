@@ -272,17 +272,13 @@ async function loadDB(){
     if(!DB.grenades) DB.grenades = [];
     if(!DB.payments) DB.payments = [];
     renderAll();
-  } catch(e) { 
-    setSync(false);
-    DB = { prods: DEFAULT_PRODS, pers: NOMS.map((n,i)=>({id:'u'+i,nom:n,grp:'À classer'})), consos: [], month: new Date().toISOString().slice(0,7), grenades: [], payments: [] };
-    renderAll();
-  }
+  } catch(e) { alert("Erreur serveur"); }
 }
 
 let curPers=null, run={};
 function prodRank(){const cnt={};DB.prods.forEach(p=>cnt[p.id]=0);DB.consos.forEach(c=>{if(cnt[c.prodId]!=null)cnt[c.prodId]+=c.qty;});return DB.prods.slice().sort((a,b)=>(cnt[b.id]||0)-(cnt[a.id]||0)).map(p=>({...p,used:cnt[p.id]||0}));}
 
-// AFFICHAGE LISTE POPOTE PAR GROUPES (OUVERTS PAR DÉFAUT COMME AVANT)
+// AFFICHAGE LISTE POPOTE PAR GROUPES (AVEC RECHERCHE)
 function renderPersGroups() {
   const q = document.getElementById('persSearch').value.trim().toLowerCase();
   const byGrp = {};
@@ -302,8 +298,7 @@ function renderPersGroups() {
     if(!list || !list.length) return;
     list.sort((a,b) => a.nom.localeCompare(b.nom));
     
-    // Tous les groupes ouverts par défaut ("open") comme avant
-    const isOpen = 'open';
+    const isOpen = q ? 'open' : '';
     
     html += `<div class="grp ${isOpen}">
                <div class="grph" onclick="this.parentElement.classList.toggle('open')">
@@ -473,7 +468,7 @@ function renderGreGroups() {
     if(!list || !list.length) return;
     list.sort((a,b) => a.nom.localeCompare(b.nom));
 
-    const isOpen = 'open';
+    const isOpen = q ? 'open' : '';
 
     html += `<div class="grp ${isOpen}">
                <div class="grph" onclick="this.parentElement.classList.toggle('open')">
@@ -750,7 +745,7 @@ async function delProd(id){if(!confirm('Supprimer ce produit ?'))return;DB.prods
 function openPersModal(){renderPersEdit();openModal('mPers');}
 function renderPersEdit(){const byGrp={};GROUPS.forEach(g=>byGrp[g]=[]);DB.pers.forEach(p=>byGrp[p.grp||'À classer'].push(p));let html='';GROUPS.forEach(g=>{if(!byGrp[g].length)return;html+=`<div style="font-size:11px;color:var(--mut);font-weight:700;margin:16px 0 4px;text-transform:uppercase;letter-spacing:.5px">${g} · ${byGrp[g].length}</div>`;byGrp[g].sort((a,b)=>a.nom.localeCompare(b.nom)).forEach(p=>{html+=`<div class="row"><div class="name" style="flex:1;font-size:14px;font-weight:500">${p.nom}</div><select class="in" style="width:auto;padding:8px 10px" onchange="movePers('${p.id}',this.value)">${GROUPS.map(gg=>`<option ${gg===p.grp?'selected':''}>${gg}</option>`).join('')}</select><button class="del" onclick="delPers('${p.id}')">🗑</button></div>`;});});document.getElementById('persEdit').innerHTML=html;}
 async function movePers(id,grp){const p=DB.pers.find(x=>x.id===id);p.grp=grp;await sSet(KEY_PERS,DB.pers);renderPersEdit();}
-async function addPers(){const nom=document.getElementById('newPersNom').value.trim();if(!nom)return;DB.pers.push({id:'u'+Date.now(),nom:nom.toUpperCase(),grp:document.getElementById('newPersGrp').value});await sSet(KEY_PERS,DB.pers);document.getElementById('newPersNom'].value='';renderPersEdit();toast('Ajouté');}
+async function addPers(){const nom=document.getElementById('newPersNom').value.trim();if(!nom)return;DB.pers.push({id:'u'+Date.now(),nom:nom.toUpperCase(),grp:document.getElementById('newPersGrp').value});await sSet(KEY_PERS,DB.pers);document.getElementById('newPersNom').value='';renderPersEdit();toast('Ajouté');}
 async function delPers(id){if(!confirm('Retirer cette personne ?'))return;DB.pers=DB.pers.filter(x=>x.id!==id);await sSet(KEY_PERS,DB.pers);renderPersEdit();}
 async function clotureMois(){if(!confirm('Clôturer le mois ? Les consos et paiements sont remis à zéro. Le stock est conservé.'))return;DB.consos=[];DB.payments=[];DB.pers.forEach(p=>p.paid=false);DB.month=new Date().toISOString().slice(0,7);await sSet(KEY_CONSO,DB.consos);await sSet(KEY_PAY,DB.payments);await sSet(KEY_PERS,DB.pers);await sSet(KEY_MONTH,DB.month);renderLog();toast('Mois clôturé');}
 function exportCSV(){const tot={};DB.pers.forEach(p=>tot[p.id]=0);DB.consos.forEach(c=>{if(tot[c.persId]!=null)tot[c.persId]+=c.qty*c.prix;});let rows=[['Peloton','Nom','Total EUR','Statut']];DB.pers.forEach(p=>{if(tot[p.id]>0)rows.push([p.grp,p.nom,tot[p.id].toFixed(2),'A regler']);});const csv=rows.map(r=>r.map(x=>`"${x}"`).join(';')).join('\n');const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent('\uFEFF'+csv);a.download='popote_'+DB.month+'.csv';a.click();}
@@ -786,7 +781,7 @@ function renderAll(){
   renderGreGroups();
   renderGreState();
 }
-(async()=>{await loadDB(); attachProdEvents(); attachGreEvents();})();
+(async()=>{await loadDB(); attachProdEvents(); attachGreEvents(); renderAll();})();
 </script>
 </body>
 </html>
