@@ -260,8 +260,8 @@ let DB=null;
 
 function setSync(ok){document.getElementById('syncDot').className='dot'+(ok?'':' off');document.getElementById('syncTxt').textContent=ok?'Synchro':'Erreur';}
 async function sSet(k, v){try {await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: k, data: v }), headers: { 'Content-Type': 'text/plain;charset=utf-8' } });setSync(true);} catch(e) { setSync(false); }}
-function money(n){return (Number(n)||0).toFixed(2).replace('.',',')+' €';}
-function initials(nom){nom=String(nom||'?');const p=nom.split(/[\s-]+/).filter(Boolean);if(!p.length)return '?';return (p[0][0]+(p[1]?p[1][0]:'')).toUpperCase();}
+function money(n){return n.toFixed(2).replace('.',',')+' €';}
+function initials(nom){const p=nom.split(/[\s-]+/);return (p[0][0]+(p[1]?p[1][0]:'')).toUpperCase();}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1400);}
 
 async function loadDB(){
@@ -269,27 +269,27 @@ async function loadDB(){
     const res = await fetch(API_URL);
     DB = await res.json();
     if(!DB.prods || DB.prods.length === 0) DB = { prods: DEFAULT_PRODS, pers: NOMS.map((n,i)=>({id:'u'+i,nom:n,grp:'À classer'})), consos: [], month: new Date().toISOString().slice(0,7), grenades: [], payments: [] };
-    if(!DB.prods) DB.prods = [];
-    if(!DB.pers) DB.pers = [];
-    if(!DB.consos) DB.consos = [];
     if(!DB.grenades) DB.grenades = [];
-    if(!DB.tirsMO) DB.tirsMO = [];
     if(!DB.payments) DB.payments = [];
     renderAll();
-  } catch(e) { alert("Erreur serveur"); }
+  } catch(e) { 
+    setSync(false);
+    DB = { prods: DEFAULT_PRODS, pers: NOMS.map((n,i)=>({id:'u'+i,nom:n,grp:'À classer'})), consos: [], month: new Date().toISOString().slice(0,7), grenades: [], payments: [] };
+    renderAll();
+  }
 }
 
 let curPers=null, run={};
 function prodRank(){const cnt={};DB.prods.forEach(p=>cnt[p.id]=0);DB.consos.forEach(c=>{if(cnt[c.prodId]!=null)cnt[c.prodId]+=c.qty;});return DB.prods.slice().sort((a,b)=>(cnt[b.id]||0)-(cnt[a.id]||0)).map(p=>({...p,used:cnt[p.id]||0}));}
 
-// AFFICHAGE LISTE POPOTE PAR GROUPES (FERMÉS PAR DÉFAUT SAUF SI RECHERCHE)
+// AFFICHAGE LISTE POPOTE PAR GROUPES (OUVERTS PAR DÉFAUT COMME AVANT)
 function renderPersGroups() {
   const q = document.getElementById('persSearch').value.trim().toLowerCase();
   const byGrp = {};
   GROUPS.forEach(g => byGrp[g] = []);
   
   DB.pers.forEach(p => {
-    if(!q || String(p.nom||'').toLowerCase().includes(q)) {
+    if(!q || p.nom.toLowerCase().includes(q)) {
       const g = p.grp || 'À classer';
       if(byGrp[g]) byGrp[g].push(p);
       else { byGrp['À classer'] = byGrp['À classer'] || []; byGrp['À classer'].push(p); }
@@ -300,10 +300,10 @@ function renderPersGroups() {
   GROUPS.forEach(g => {
     const list = byGrp[g];
     if(!list || !list.length) return;
-    list.sort((a,b) => String(a.nom||'').localeCompare(String(b.nom||'')));
+    list.sort((a,b) => a.nom.localeCompare(b.nom));
     
-    // Fermé par défaut, ouvert uniquement si on tape une recherche
-    const isOpen = q ? 'open' : '';
+    // Tous les groupes ouverts par défaut ("open") comme avant
+    const isOpen = 'open';
     
     html += `<div class="grp ${isOpen}">
                <div class="grph" onclick="this.parentElement.classList.toggle('open')">
@@ -372,8 +372,7 @@ function renderBilan(){
     if(due > 0 && blFilter === 'paid') return;
     if(totConsos[p.id] === 0 && blFilter !== 'all') return;
 
-    const g = p.grp || 'À classer';
-    (byGrp[g] || byGrp['À classer']).push({...p, due: due});
+    byGrp[p.grp || 'À classer'].push({...p, due: due});
   });
 
   let html = '';
@@ -382,15 +381,14 @@ function renderBilan(){
     if(!list.length) return;
     const sum = list.reduce((s, p) => s + p.due, 0);
     
-    // Groupes du bilan également fermés par défaut pour plus de visibilité
-    html += `<div class="grp">
+    html += `<div class="grp open">
               <div class="grph" onclick="this.parentElement.classList.toggle('open')">
                 <span><span class="chev">▸</span>${g} <span class="cnt">· ${list.length}</span></span>
                 <span class="mono">${money(sum)}</span>
               </div>
               <div class="grpbody">`;
               
-    list.sort((a,b) => String(a.nom||'').localeCompare(String(b.nom||''))).forEach(p => {
+    list.sort((a,b) => a.nom.localeCompare(b.nom)).forEach(p => {
       const isPaid = p.due === 0;
       html += `<div class="row" style="padding-left:6px">
                 <div class="name">${p.nom}</div>
@@ -447,7 +445,6 @@ function setVeh(v) {
   document.getElementById('lblVehActive').textContent = (v === 'B1' ? 'BRAVO 1' : 'BRAVO 2');
   document.getElementById('lblVehState').textContent = (v === 'B1' ? 'BRAVO 1' : 'BRAVO 2');
   renderGreGroups();
-  renderGreState();
 }
 
 function renderGreGroups() {
@@ -463,7 +460,7 @@ function renderGreGroups() {
   groupsGre.forEach(g => byGrp[g] = []);
 
   allPers.forEach(p => {
-    if(!q || String(p.nom||'').toLowerCase().includes(q)) {
+    if(!q || p.nom.toLowerCase().includes(q)) {
       const g = p.grp || 'À classer';
       if(byGrp[g]) byGrp[g].push(p);
       else { byGrp['À classer'] = byGrp['À classer'] || []; byGrp['À classer'].push(p); }
@@ -474,10 +471,9 @@ function renderGreGroups() {
   groupsGre.forEach(g => {
     const list = byGrp[g];
     if(!list || !list.length) return;
-    list.sort((a,b) => String(a.nom||'').localeCompare(String(b.nom||'')));
+    list.sort((a,b) => a.nom.localeCompare(b.nom));
 
-    // Fermé par défaut
-    const isOpen = q ? 'open' : '';
+    const isOpen = 'open';
 
     html += `<div class="grp ${isOpen}">
                <div class="grph" onclick="this.parentElement.classList.toggle('open')">
@@ -485,7 +481,7 @@ function renderGreGroups() {
                </div>
                <div class="grpbody">`;
     list.forEach(p => {
-      html += `<div class="presult" onclick="selGrePers('${p.id}', '${String(p.nom||'').replace(/'/g, "\\'")}', '${p.grp||''}')"><span class="nm">${p.nom}</span><span class="gg">${p.grp||''}</span></div>`;
+      html += `<div class="presult" onclick="selGrePers('${p.id}', '${p.nom.replace(/'/g, "\\'")}', '${p.grp||''}')"><span class="nm">${p.nom}</span><span class="gg">${p.grp||''}</span></div>`;
     });
     html += `</div></div>`;
   });
@@ -752,13 +748,13 @@ async function editProd(id,f,v){const p=DB.prods.find(x=>x.id===id);p[f]=v;await
 async function addProd(){const nom=document.getElementById('npNom').value.trim();if(!nom)return;DB.prods.push({id:'p'+Date.now(),nom,prix:parseFloat(document.getElementById('npPrix').value)||0,stock:parseInt(document.getElementById('npStock').value)||0});await sSet(KEY_PROD,DB.prods);['npNom','npPrix','npStock'].forEach(i=>document.getElementById(i).value='');renderProdEdit();renderStock();toast('Produit ajouté');}
 async function delProd(id){if(!confirm('Supprimer ce produit ?'))return;DB.prods=DB.prods.filter(x=>x.id!==id);await sSet(KEY_PROD,DB.prods);renderProdEdit();renderStock();}
 function openPersModal(){renderPersEdit();openModal('mPers');}
-function renderPersEdit(){const byGrp={};GROUPS.forEach(g=>byGrp[g]=[]);DB.pers.forEach(p=>(byGrp[p.grp]||byGrp['À classer']).push(p));let html='';GROUPS.forEach(g=>{if(!byGrp[g].length)return;html+=`<div style="font-size:11px;color:var(--mut);font-weight:700;margin:16px 0 4px;text-transform:uppercase;letter-spacing:.5px">${g} · ${byGrp[g].length}</div>`;byGrp[g].sort((a,b)=>String(a.nom||'').localeCompare(String(b.nom||''))).forEach(p=>{html+=`<div class="row"><div class="name" style="flex:1;font-size:14px;font-weight:500">${p.nom}</div><select class="in" style="width:auto;padding:8px 10px" onchange="movePers('${p.id}',this.value)">${GROUPS.map(gg=>`<option ${gg===p.grp?'selected':''}>${gg}</option>`).join('')}</select><button class="del" onclick="delPers('${p.id}')">🗑</button></div>`;});});document.getElementById('persEdit').innerHTML=html;}
+function renderPersEdit(){const byGrp={};GROUPS.forEach(g=>byGrp[g]=[]);DB.pers.forEach(p=>byGrp[p.grp||'À classer'].push(p));let html='';GROUPS.forEach(g=>{if(!byGrp[g].length)return;html+=`<div style="font-size:11px;color:var(--mut);font-weight:700;margin:16px 0 4px;text-transform:uppercase;letter-spacing:.5px">${g} · ${byGrp[g].length}</div>`;byGrp[g].sort((a,b)=>a.nom.localeCompare(b.nom)).forEach(p=>{html+=`<div class="row"><div class="name" style="flex:1;font-size:14px;font-weight:500">${p.nom}</div><select class="in" style="width:auto;padding:8px 10px" onchange="movePers('${p.id}',this.value)">${GROUPS.map(gg=>`<option ${gg===p.grp?'selected':''}>${gg}</option>`).join('')}</select><button class="del" onclick="delPers('${p.id}')">🗑</button></div>`;});});document.getElementById('persEdit').innerHTML=html;}
 async function movePers(id,grp){const p=DB.pers.find(x=>x.id===id);p.grp=grp;await sSet(KEY_PERS,DB.pers);renderPersEdit();}
-async function addPers(){const nom=document.getElementById('newPersNom').value.trim();if(!nom)return;DB.pers.push({id:'u'+Date.now(),nom:nom.toUpperCase(),grp:document.getElementById('newPersGrp').value});await sSet(KEY_PERS,DB.pers);document.getElementById('newPersNom').value='';renderPersEdit();toast('Ajouté');}
+async function addPers(){const nom=document.getElementById('newPersNom').value.trim();if(!nom)return;DB.pers.push({id:'u'+Date.now(),nom:nom.toUpperCase(),grp:document.getElementById('newPersGrp').value});await sSet(KEY_PERS,DB.pers);document.getElementById('newPersNom'].value='';renderPersEdit();toast('Ajouté');}
 async function delPers(id){if(!confirm('Retirer cette personne ?'))return;DB.pers=DB.pers.filter(x=>x.id!==id);await sSet(KEY_PERS,DB.pers);renderPersEdit();}
-async function clotureMois(){if(!confirm('Clôturer le mois ? Les consos et paiements sont remis à zéro. Le stock est conservé.'))return;DB.consos=[];DB.payments=[];DB.pers.forEach(p=>p.paid=false);DB.month=new Date().toISOString().slice(0,7);await sSet(KEY_CONSO,DB.consos);await sSet(KEY_PAY,DB.payments);await sSet(KEY_PERS,DB.pers);await sSet(KEY_MONTH,DB.month);renderLog();renderBilan();toast('Mois clôturé');}
+async function clotureMois(){if(!confirm('Clôturer le mois ? Les consos et paiements sont remis à zéro. Le stock est conservé.'))return;DB.consos=[];DB.payments=[];DB.pers.forEach(p=>p.paid=false);DB.month=new Date().toISOString().slice(0,7);await sSet(KEY_CONSO,DB.consos);await sSet(KEY_PAY,DB.payments);await sSet(KEY_PERS,DB.pers);await sSet(KEY_MONTH,DB.month);renderLog();toast('Mois clôturé');}
 function exportCSV(){const tot={};DB.pers.forEach(p=>tot[p.id]=0);DB.consos.forEach(c=>{if(tot[c.persId]!=null)tot[c.persId]+=c.qty*c.prix;});let rows=[['Peloton','Nom','Total EUR','Statut']];DB.pers.forEach(p=>{if(tot[p.id]>0)rows.push([p.grp,p.nom,tot[p.id].toFixed(2),'A regler']);});const csv=rows.map(r=>r.map(x=>`"${x}"`).join(';')).join('\n');const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent('\uFEFF'+csv);a.download='popote_'+DB.month+'.csv';a.click();}
-async function reloadAll(){await loadDB();if(curPers){curPers=DB.pers.find(p=>p.id===curPers.id);if(curPers)renderProds();else clearPers();}toast('Rafraîchi');}
+async function reloadAll(){await loadDB();renderAll();if(curPers){curPers=DB.pers.find(p=>p.id===curPers.id);if(curPers)renderProds();else clearPers();}toast('Rafraîchi');}
 function openModal(id){document.getElementById(id).classList.add('on');}
 function closeModal(id){document.getElementById(id).classList.remove('on');}
 document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('on');}));
