@@ -278,7 +278,7 @@ async function loadDB(){
 let curPers=null, run={};
 function prodRank(){const cnt={};DB.prods.forEach(p=>cnt[p.id]=0);DB.consos.forEach(c=>{if(cnt[c.prodId]!=null)cnt[c.prodId]+=c.qty;});return DB.prods.slice().sort((a,b)=>(cnt[b.id]||0)-(cnt[a.id]||0)).map(p=>({...p,used:cnt[p.id]||0}));}
 
-// AFFICHAGE LISTE POPOTE PAR GROUPES (AVEC RECHERCHE)
+// AFFICHAGE LISTE POPOTE PAR GROUPES (FERMÉS PAR DÉFAUT SAUF SI RECHERCHE)
 function renderPersGroups() {
   const q = document.getElementById('persSearch').value.trim().toLowerCase();
   const byGrp = {};
@@ -298,6 +298,7 @@ function renderPersGroups() {
     if(!list || !list.length) return;
     list.sort((a,b) => a.nom.localeCompare(b.nom));
     
+    // Fermé par défaut, ouvert uniquement si on tape une recherche
     const isOpen = q ? 'open' : '';
     
     html += `<div class="grp ${isOpen}">
@@ -376,7 +377,8 @@ function renderBilan(){
     if(!list.length) return;
     const sum = list.reduce((s, p) => s + p.due, 0);
     
-    html += `<div class="grp open">
+    // Groupes du bilan également fermés par défaut pour plus de visibilité
+    html += `<div class="grp">
               <div class="grph" onclick="this.parentElement.classList.toggle('open')">
                 <span><span class="chev">▸</span>${g} <span class="cnt">· ${list.length}</span></span>
                 <span class="mono">${money(sum)}</span>
@@ -468,6 +470,7 @@ function renderGreGroups() {
     if(!list || !list.length) return;
     list.sort((a,b) => a.nom.localeCompare(b.nom));
 
+    // Fermé par défaut
     const isOpen = q ? 'open' : '';
 
     html += `<div class="grp ${isOpen}">
@@ -748,7 +751,7 @@ async function movePers(id,grp){const p=DB.pers.find(x=>x.id===id);p.grp=grp;awa
 async function addPers(){const nom=document.getElementById('newPersNom').value.trim();if(!nom)return;DB.pers.push({id:'u'+Date.now(),nom:nom.toUpperCase(),grp:document.getElementById('newPersGrp').value});await sSet(KEY_PERS,DB.pers);document.getElementById('newPersNom').value='';renderPersEdit();toast('Ajouté');}
 async function delPers(id){if(!confirm('Retirer cette personne ?'))return;DB.pers=DB.pers.filter(x=>x.id!==id);await sSet(KEY_PERS,DB.pers);renderPersEdit();}
 async function clotureMois(){if(!confirm('Clôturer le mois ? Les consos et paiements sont remis à zéro. Le stock est conservé.'))return;DB.consos=[];DB.payments=[];DB.pers.forEach(p=>p.paid=false);DB.month=new Date().toISOString().slice(0,7);await sSet(KEY_CONSO,DB.consos);await sSet(KEY_PAY,DB.payments);await sSet(KEY_PERS,DB.pers);await sSet(KEY_MONTH,DB.month);renderLog();toast('Mois clôturé');}
-function exportCSV(){const tot={};DB.pers.forEach(p=>tot[p.id]=0);DB.consos.forEach(c=>{if(tot[c.persId]!=null)tot[c.persId]+=c.qty*c.prix;});let rows=[['Peloton','Nom','Total EUR','Statut']];DB.pers.forEach(p=>{if(tot[p.id]>0)rows.push([p.grp,p.nom,tot[p.id].toFixed(2),'A regler']);});const csv=rows.map(r=>r.map(x=>`"${x}"`).join(';')).join('\n');const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent('\uFEFF'+csv);a.download='popote_'+DB.month+'.csv';a.click();}
+function exportCSV(){const tot={};DB.pers.forEach(p=>tot[p.id]=0);DB.consos.forEach(c=>{if(tot[c.persId]!=null)tot[c.persId]+=c.qty*c.prix;});let rows=[['Peloton','Nom','Total EUR','Statut']];DB.pers.forEach(p=>{if(tot[p.id]>0)rows.push([p.grp,p.nom,tot[p.id].toFixed(2),'A regler']);});const csv=rows.map(r=>r.map(x=>`"${x}"`).join(';')).join('\n');const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,+encodeURIComponent('\uFEFF'+csv);a.download='popote_'+DB.month+'.csv';a.click();}
 async function reloadAll(){await loadDB();renderAll();if(curPers){curPers=DB.pers.find(p=>p.id===curPers.id);if(curPers)renderProds();else clearPers();}toast('Rafraîchi');}
 function openModal(id){document.getElementById(id).classList.add('on');}
 function closeModal(id){document.getElementById(id).classList.remove('on');}
