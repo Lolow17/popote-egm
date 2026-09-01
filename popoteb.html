@@ -156,7 +156,7 @@
   <!-- ONGLET 2: BILAN POPOTE -->
   <section class="view" id="v-bilan">
     <div class="totbar"><div class="lbl">Total dû ce mois</div><div class="big" id="blTot">0,00 €</div><div class="meta" id="blMeta"></div></div>
-    <div class="seg"><button data-f="all" class="active">Tous</button><button data-f="due">À payer</button><button data-f="paid">Payés</button></div>
+    <div class="seg"><button data-f="all" class="active">Tous</button><button data-f="due">À régler</button><button data-f="paid">À jour</button></div>
     <div id="blGroups"></div>
     <div class="card" style="margin-top:20px; text-align:center;">
       <h2>Régler la popote</h2>
@@ -254,8 +254,8 @@ const LISTE_MUNITIONS = [
   {id:'g_genl_main', nom:'GENL (Main)'}
 ];
 
-const API_URL = "https://script.google.com/macros/s/AKfycbxqaKr2-fz9wg43lqbwSqOtl64PSfV118FEi44S5YVIg7BJQtCN_CMu8w05AixGw1B2/exec";
-const KEY_PROD='popote:prods', KEY_PERS='popote:pers', KEY_CONSO='popote:consos', KEY_MONTH='popote:month', KEY_GRE='popote:grenades';
+const API_URL = "https://script.google.com/macros/s/AKfycbzhXoqZUE4AbPuPeFboSD2u2D14Xo7-oFQyXPcMNUtcf0TNXFI2wM-lCk1xfH167-sH/exec";
+const KEY_PROD='popote:prods', KEY_PERS='popote:pers', KEY_CONSO='popote:consos', KEY_MONTH='popote:month', KEY_GRE='popote:grenades', KEY_PAY='popote:payments';
 let DB=null;
 
 function setSync(ok){document.getElementById('syncDot').className='dot'+(ok?'':' off');document.getElementById('syncTxt').textContent=ok?'Synchro':'Erreur';}
@@ -268,8 +268,9 @@ async function loadDB(){
   try {
     const res = await fetch(API_URL);
     DB = await res.json();
-    if(!DB.prods || DB.prods.length === 0) DB = { prods: DEFAULT_PRODS, pers: NOMS.map((n,i)=>({id:'u'+i,nom:n,grp:'À classer'})), consos: [], month: new Date().toISOString().slice(0,7), grenades: [] };
+    if(!DB.prods || DB.prods.length === 0) DB = { prods: DEFAULT_PRODS, pers: NOMS.map((n,i)=>({id:'u'+i,nom:n,grp:'À classer'})), consos: [], month: new Date().toISOString().slice(0,7), grenades: [], payments: [] };
     if(!DB.grenades) DB.grenades = [];
+    if(!DB.payments) DB.payments = [];
     renderAll();
   } catch(e) { alert("Erreur serveur"); }
 }
@@ -297,7 +298,6 @@ function renderPersGroups() {
     if(!list || !list.length) return;
     list.sort((a,b) => a.nom.localeCompare(b.nom));
     
-    // Si on tape dans la recherche, on ouvre automatiquement les groupes
     const isOpen = q ? 'open' : '';
     
     html += `<div class="grp ${isOpen}">
@@ -324,9 +324,104 @@ function updateRunbar(){const items=Object.entries(run).filter(([,q])=>q>0);cons
 async function commitRun(){const items=Object.entries(run).filter(([,q])=>q>0);if(!items.length)return;const now=Date.now();items.forEach(([id,q])=>{const p=DB.prods.find(x=>x.id===id);DB.consos.push({id:'c'+now+Math.random().toString(36).slice(2,5),persId:curPers.id,prodId:id,qty:q,prix:p.prix,ts:now});p.stock=Math.max(0,p.stock-q);});await sSet(KEY_CONSO,DB.consos);await sSet(KEY_PROD,DB.prods);toast('✓ Conso enregistrée');navigator.vibrate&&navigator.vibrate(40);clearPers();renderLog();renderStock();}
 function renderLog(){const log=document.getElementById('csLog');const recent=[...DB.consos].reverse().slice(0,10);if(!recent.length){log.innerHTML='<div class="empty">Aucune conso ce mois</div>';return;}log.innerHTML=recent.map(c=>{const p=DB.pers.find(x=>x.id===c.persId),pr=DB.prods.find(x=>x.id===c.prodId);return `<div class="row"><div><div class="name">${p?p.nom:'?'}</div><div class="sub">${c.qty}× ${pr?pr.nom:'?'} · ${new Date(c.ts).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})} ${new Date(c.ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div></div><div style="display:flex;align-items:center;gap:6px"><span class="amt">${money(c.qty*c.prix)}</span><button class="del" onclick="delConso('${c.id}')">×</button></div></div>`;}).join('');}
 async function delConso(id){const c=DB.consos.find(x=>x.id===id);if(!c)return;const pr=DB.prods.find(x=>x.id===c.prodId);if(pr)pr.stock+=c.qty;DB.consos=DB.consos.filter(x=>x.id!==id);await sSet(KEY_CONSO,DB.consos);await sSet(KEY_PROD,DB.prods);renderLog();renderStock();}
+
 let blFilter='all';
-function renderBilan(){const tot={};DB.pers.forEach(p=>tot[p.id]=0);DB.consos.forEach(c=>{if(tot[c.persId]!=null)tot[c.persId]+=c.qty*c.prix;});let grand=0,paidCount=0,dueCount=0;DB.pers.forEach(p=>{if(tot[p.id]>0){if(p.paid)paidCount++;else{grand+=tot[p.id];dueCount++;}}});document.getElementById('blTot').textContent=money(grand);document.getElementById('blMeta').textContent=`${dueCount} à payer · ${paidCount} réglé${paidCount>1?'s':''}`;const byGrp={};GROUPS.forEach(g=>byGrp[g]=[]);DB.pers.forEach(p=>{if(tot[p.id]<=0)return;if(blFilter==='due'&&p.paid)return;if(blFilter==='paid'&&!p.paid)return;byGrp[p.grp||'À classer'].push({...p,due:tot[p.id]});});let html='';GROUPS.forEach(g=>{const list=byGrp[g];if(!list.length)return;const sum=list.reduce((s,p)=>s+(p.paid?0:p.due),0);html+=`<div class="grp open"><div class="grph" onclick="this.parentElement.classList.toggle('open')"><span><span class="chev">▸</span>${g} <span class="cnt">· ${list.length}</span></span><span class="mono">${money(sum)}</span></div><div class="grpbody">`;list.sort((a,b)=>a.nom.localeCompare(b.nom)).forEach(p=>{html+=`<div class="row" style="padding-left:6px"><div class="name">${p.nom}</div><div style="display:flex;align-items:center;gap:12px"><span class="amt mono">${money(p.due)}</span><span class="pill ${p.paid?'paid':'due'}" onclick="togglePaid('${p.id}')">${p.paid?'✓ Payé':'À payer'}</span></div></div>`;});html+='</div></div>';});document.getElementById('blGroups').innerHTML=html||'<div class="empty">Aucune conso ce mois</div>';}
-async function togglePaid(id){const p=DB.pers.find(x=>x.id===id);p.paid=!p.paid;await sSet(KEY_PERS,DB.pers);renderBilan();}
+
+function renderBilan(){
+  const totConsos = {};
+  const totPaid = {};
+  DB.pers.forEach(p => { totConsos[p.id] = 0; totPaid[p.id] = 0; });
+  
+  DB.consos.forEach(c => {
+    if(totConsos[c.persId] != null) totConsos[c.persId] += c.qty * c.prix;
+  });
+  
+  DB.payments.forEach(pay => {
+    if(totPaid[pay.persId] != null) totPaid[pay.persId] += pay.montant;
+  });
+
+  let grand = 0, paidCount = 0, dueCount = 0;
+  const soldePers = {};
+
+  DB.pers.forEach(p => {
+    const totalC = totConsos[p.id] || 0;
+    const totalP = totPaid[p.id] || 0;
+    const resteDue = Math.max(0, totalC - totalP);
+    soldePers[p.id] = resteDue;
+
+    if (totalC > 0) {
+      if (resteDue === 0) paidCount++;
+      else { grand += resteDue; dueCount++; }
+    }
+  });
+
+  document.getElementById('blTot').textContent = money(grand);
+  document.getElementById('blMeta').textContent = `${dueCount} à régler · ${paidCount} à jour`;
+
+  const byGrp = {};
+  GROUPS.forEach(g => byGrp[g] = []);
+
+  DB.pers.forEach(p => {
+    const due = soldePers[p.id] || 0;
+    if(due <= 0 && blFilter === 'due') return;
+    if(due > 0 && blFilter === 'paid') return;
+    if(totConsos[p.id] === 0 && blFilter !== 'all') return;
+
+    byGrp[p.grp || 'À classer'].push({...p, due: due});
+  });
+
+  let html = '';
+  GROUPS.forEach(g => {
+    const list = byGrp[g];
+    if(!list.length) return;
+    const sum = list.reduce((s, p) => s + p.due, 0);
+    
+    html += `<div class="grp open">
+              <div class="grph" onclick="this.parentElement.classList.toggle('open')">
+                <span><span class="chev">▸</span>${g} <span class="cnt">· ${list.length}</span></span>
+                <span class="mono">${money(sum)}</span>
+              </div>
+              <div class="grpbody">`;
+              
+    list.sort((a,b) => a.nom.localeCompare(b.nom)).forEach(p => {
+      const isPaid = p.due === 0;
+      html += `<div class="row" style="padding-left:6px">
+                <div class="name">${p.nom}</div>
+                <div style="display:flex;align-items:center;gap:12px">
+                  <span class="amt mono">${money(p.due)}</span>
+                  <span class="pill ${isPaid ? 'paid' : 'due'}" onclick="reglerDette('${p.id}', ${totConsos[p.id]}, ${totPaid[p.id]})">
+                    ${isPaid ? '✓ Réglé' : 'Encaisser'}
+                  </span>
+                </div>
+               </div>`;
+    });
+    html += '</div></div>';
+  });
+
+  document.getElementById('blGroups').innerHTML = html || '<div class="empty">Aucune consommation ce mois-ci</div>';
+}
+
+async function reglerDette(persId, totalConsos, totalPaidDeja) {
+  const reste = totalConsos - totalPaidDeja;
+  if(reste <= 0) {
+    toast('Cette personne est déjà à jour !');
+    return;
+  }
+  
+  if(!confirm(`Confirmer l'encaissement de ${money(reste)} pour cette personne ?`)) return;
+
+  DB.payments.push({
+    id: 'pay_' + Date.now() + Math.random().toString(36).slice(2,5),
+    persId: persId,
+    montant: reste,
+    ts: Date.now()
+  });
+
+  await sSet(KEY_PAY, DB.payments);
+  toast('✓ Paiement enregistré, ardoise remise à zéro');
+  renderBilan();
+}
+
 function renderStock(){document.getElementById('stList').innerHTML=DB.prods.map(p=>{const low=p.stock<=5;return `<div class="row"><div><div class="name">${p.nom}</div><div class="sub">${money(p.prix)} l'unité</div></div><div class="stepper"><button onclick="stockStep('${p.id}',-1)">−</button><span class="v" style="${low?'color:#fca5a5':''}">${p.stock}</span><button onclick="stockStep('${p.id}',1)">＋</button></div></div>`;}).join('')||'<div class="empty">Aucun produit</div>';}
 async function stockStep(id,d){const p=DB.prods.find(x=>x.id===id);p.stock=Math.max(0,p.stock+d);await sSet(KEY_PROD,DB.prods);renderStock();if(curPers)renderProds();}
 
@@ -652,8 +747,8 @@ function renderPersEdit(){const byGrp={};GROUPS.forEach(g=>byGrp[g]=[]);DB.pers.
 async function movePers(id,grp){const p=DB.pers.find(x=>x.id===id);p.grp=grp;await sSet(KEY_PERS,DB.pers);renderPersEdit();}
 async function addPers(){const nom=document.getElementById('newPersNom').value.trim();if(!nom)return;DB.pers.push({id:'u'+Date.now(),nom:nom.toUpperCase(),grp:document.getElementById('newPersGrp').value});await sSet(KEY_PERS,DB.pers);document.getElementById('newPersNom').value='';renderPersEdit();toast('Ajouté');}
 async function delPers(id){if(!confirm('Retirer cette personne ?'))return;DB.pers=DB.pers.filter(x=>x.id!==id);await sSet(KEY_PERS,DB.pers);renderPersEdit();}
-async function clotureMois(){if(!confirm('Clôturer le mois ? Les consos et paiements sont remis à zéro. Le stock est conservé.'))return;DB.consos=[];DB.pers.forEach(p=>p.paid=false);DB.month=new Date().toISOString().slice(0,7);await sSet(KEY_CONSO,DB.consos);await sSet(KEY_PERS,DB.pers);await sSet(KEY_MONTH,DB.month);renderLog();toast('Mois clôturé');}
-function exportCSV(){const tot={};DB.pers.forEach(p=>tot[p.id]=0);DB.consos.forEach(c=>{if(tot[c.persId]!=null)tot[c.persId]+=c.qty*c.prix;});let rows=[['Peloton','Nom','Total EUR','Statut']];DB.pers.forEach(p=>{if(tot[p.id]>0)rows.push([p.grp,p.nom,tot[p.id].toFixed(2),p.paid?'Paye':'A payer']);});const csv=rows.map(r=>r.map(x=>`"${x}"`).join(';')).join('\n');const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent('\uFEFF'+csv);a.download='popote_'+DB.month+'.csv';a.click();}
+async function clotureMois(){if(!confirm('Clôturer le mois ? Les consos et paiements sont remis à zéro. Le stock est conservé.'))return;DB.consos=[];DB.payments=[];DB.pers.forEach(p=>p.paid=false);DB.month=new Date().toISOString().slice(0,7);await sSet(KEY_CONSO,DB.consos);await sSet(KEY_PAY,DB.payments);await sSet(KEY_PERS,DB.pers);await sSet(KEY_MONTH,DB.month);renderLog();toast('Mois clôturé');}
+function exportCSV(){const tot={};DB.pers.forEach(p=>tot[p.id]=0);DB.consos.forEach(c=>{if(tot[c.persId]!=null)tot[c.persId]+=c.qty*c.prix;});let rows=[['Peloton','Nom','Total EUR','Statut']];DB.pers.forEach(p=>{if(tot[p.id]>0)rows.push([p.grp,p.nom,tot[p.id].toFixed(2),'A regler']);});const csv=rows.map(r=>r.map(x=>`"${x}"`).join(';')).join('\n');const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent('\uFEFF'+csv);a.download='popote_'+DB.month+'.csv';a.click();}
 async function reloadAll(){await loadDB();renderAll();if(curPers){curPers=DB.pers.find(p=>p.id===curPers.id);if(curPers)renderProds();else clearPers();}toast('Rafraîchi');}
 function openModal(id){document.getElementById(id).classList.add('on');}
 function closeModal(id){document.getElementById(id).classList.remove('on');}
